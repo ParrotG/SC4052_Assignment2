@@ -29,6 +29,7 @@ The demo contains the following components:
   - trusted-domain bonuses
   - freshness bonuses
 - Console output for both pure PageRank ranking and heuristic-enhanced ranking.
+- Graph visualization with the selected top-k nodes highlighted for each ranking strategy.
 
 ## Installation
 
@@ -49,13 +50,13 @@ pip install -e .
 If you prefer installing packages directly instead of editable mode, you may also run:
 
 ```bash
-uv pip install networkx numpy scipy
+uv pip install matplotlib networkx numpy scipy
 ```
 
 or
 
 ```bash
-pip install networkx numpy scipy
+pip install matplotlib networkx numpy scipy
 ```
 
 ## How to Run
@@ -66,13 +67,25 @@ Run the demo from the project root with:
 python -m crawl_strategy_demo
 ```
 
+You may also override the number of selected URLs with the optional `k` argument:
+
+```bash
+python -m crawl_strategy_demo --top-k 3
+```
+
 The program will:
 
 - build the sample web graph,
 - compute PageRank scores,
 - print the top-k URLs by PageRank,
 - compute heuristic-enhanced crawl scores,
-- print the top-k URLs selected by the heuristic strategy.
+- print the top-k URLs selected by the heuristic strategy,
+- generate graph images with highlighted selected nodes for both ranking methods.
+
+The generated image files are saved to:
+
+- `outputs/pagerank_topk_graph.png`
+- `outputs/heuristic_topk_graph.png`
 
 ## Customizing the Graph
 

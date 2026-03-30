@@ -1,8 +1,18 @@
 from __future__ import annotations
 
+import argparse
 from dataclasses import dataclass
+import os
+from pathlib import Path
 from typing import Dict, List, Iterable, Tuple
 from urllib.parse import urlparse
+
+os.environ.setdefault("MPLCONFIGDIR", str(Path(".matplotlib-cache").resolve()))
+
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 import networkx as nx
 
 
@@ -32,21 +42,25 @@ def build_sample_web_graph() -> Tuple[nx.DiGraph, Dict[str, PageMetadata]]:
             "https://research.example.edu/labs/ml",
             "https://open-data.example.org/datasets/health-ai",
             "https://news.example.com/ai-breakthrough",
+            "https://portal.example.com/search?q=ai",
         ],
         "https://research.example.edu/papers/ai-survey": [
             "https://research.example.edu/labs/ml",
             "https://open-data.example.org/datasets/health-ai",
             "https://journal.example.org/article/rag-overview",
+            "https://portal.example.com/search?q=ai",
         ],
         "https://research.example.edu/labs/ml": [
             "https://research.example.edu/papers/ai-survey",
             "https://open-data.example.org/datasets/health-ai",
             "https://journal.example.org/article/rag-overview",
+            "https://portal.example.com/search?q=ai",
         ],
         "https://open-data.example.org/": [
             "https://open-data.example.org/datasets/health-ai",
             "https://open-data.example.org/datasets/climate",
             "https://journal.example.org/article/rag-overview",
+            "https://portal.example.com/search?q=ai",
         ],
         "https://open-data.example.org/datasets/health-ai": [
             "https://research.example.edu/papers/ai-survey",
@@ -58,6 +72,7 @@ def build_sample_web_graph() -> Tuple[nx.DiGraph, Dict[str, PageMetadata]]:
         "https://journal.example.org/": [
             "https://journal.example.org/article/rag-overview",
             "https://journal.example.org/article/medical-imaging",
+            "https://portal.example.com/search?q=ai",
         ],
         "https://journal.example.org/article/rag-overview": [
             "https://research.example.edu/papers/ai-survey",
@@ -69,6 +84,7 @@ def build_sample_web_graph() -> Tuple[nx.DiGraph, Dict[str, PageMetadata]]:
         "https://news.example.com/": [
             "https://news.example.com/ai-breakthrough",
             "https://news.example.com/ai-opinion",
+            "https://portal.example.com/search?q=ai",
         ],
         "https://news.example.com/ai-breakthrough": [
             "https://research.example.edu/papers/ai-survey",
@@ -404,8 +420,123 @@ def print_ranked_results(
         print(f"{index}. {row}")
 
 
+def parse_arguments() -> argparse.Namespace:
+    """Parse optional command-line arguments for the demo."""
+    parser = argparse.ArgumentParser(
+        description="Run the PageRank-based crawl strategy demo.",
+    )
+    parser.add_argument(
+        "-k",
+        "--top-k",
+        type=int,
+        default=5,
+        help="Number of top URLs to display and highlight. Default: 5.",
+    )
+    args = parser.parse_args()
+
+    if args.top_k <= 0:
+        parser.error("--top-k must be a positive integer.")
+
+    return args
+
+
+def build_display_label(url: str) -> str:
+    """
+    Build a concise node label for graph visualization.
+
+    Labels keep the host plus the final path component so the plot
+    remains readable while still identifying each URL.
+    """
+    parsed = urlparse(url)
+    host = parsed.netloc
+    path_parts = [part for part in parsed.path.split("/") if part]
+
+    if not path_parts:
+        suffix = "/"
+    else:
+        suffix = path_parts[-1]
+
+    if parsed.query:
+        suffix = f"{suffix}?..."
+
+    return f"{host}\n{suffix}"
+
+
+def save_ranked_graph_visualization(
+    graph: nx.DiGraph,
+    layout_positions: Dict[str, Tuple[float, float]],
+    selected_urls: List[str],
+    title: str,
+    output_path: Path,
+) -> None:
+    """
+    Save a graph image with the selected top-k URLs highlighted.
+
+    Args:
+        graph: The directed web graph.
+        layout_positions: Precomputed positions for consistent plotting.
+        selected_urls: URLs that should be highlighted.
+        title: Figure title.
+        output_path: Target image path.
+    """
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    selected_url_set = set(selected_urls)
+    node_colors = [
+        "#f28e2b" if node in selected_url_set else "#d9d9d9"
+        for node in graph.nodes()
+    ]
+    node_sizes = [
+        1800 if node in selected_url_set else 1000
+        for node in graph.nodes()
+    ]
+    labels = {
+        node: build_display_label(node)
+        for node in graph.nodes()
+    }
+
+    fig, ax = plt.subplots(figsize=(14, 10))
+    ax.set_title(title, fontsize=14, fontweight="bold")
+    ax.axis("off")
+
+    nx.draw_networkx_edges(
+        graph,
+        pos=layout_positions,
+        ax=ax,
+        arrows=True,
+        arrowstyle="-|>",
+        arrowsize=16,
+        edge_color="#9aa0a6",
+        width=1.2,
+        alpha=0.8,
+        connectionstyle="arc3,rad=0.08",
+    )
+    nx.draw_networkx_nodes(
+        graph,
+        pos=layout_positions,
+        ax=ax,
+        node_color=node_colors,
+        node_size=node_sizes,
+        edgecolors="#444444",
+        linewidths=1.2,
+    )
+    nx.draw_networkx_labels(
+        graph,
+        pos=layout_positions,
+        labels=labels,
+        ax=ax,
+        font_size=8,
+        font_weight="bold",
+    )
+
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+
+
 def main() -> None:
     """Run the full demo."""
+    args = parse_arguments()
     graph, metadata = build_sample_web_graph()
 
     print(f"Number of nodes: {graph.number_of_nodes()}")
@@ -413,13 +544,39 @@ def main() -> None:
 
     pagerank_scores = compute_pagerank_scores(graph, alpha=0.85)
 
-    top_k = 5
+    top_k = args.top_k
 
     top_by_authority = get_top_k_by_authority(pagerank_scores, top_k)
     print_ranked_results("Top-k URLs by PageRank authority", top_by_authority)
 
     top_by_heuristics = get_top_k_with_heuristics(pagerank_scores, metadata, top_k)
     print_ranked_results("Top-k URLs by heuristic-enhanced policy", top_by_heuristics)
+
+    layout_positions = nx.kamada_kawai_layout(graph)
+    output_directory = Path("outputs")
+
+    pagerank_plot_path = output_directory / "pagerank_topk_graph.png"
+    heuristic_plot_path = output_directory / "heuristic_topk_graph.png"
+
+    save_ranked_graph_visualization(
+        graph=graph,
+        layout_positions=layout_positions,
+        selected_urls=[url for url, _ in top_by_authority],
+        title="Top-k URLs by PageRank authority",
+        output_path=pagerank_plot_path,
+    )
+    save_ranked_graph_visualization(
+        graph=graph,
+        layout_positions=layout_positions,
+        selected_urls=[url for url, _, _ in top_by_heuristics],
+        title="Top-k URLs by heuristic-enhanced policy",
+        output_path=heuristic_plot_path,
+    )
+
+    print("\nSaved graph visualizations")
+    print("--------------------------")
+    print(f"1. {pagerank_plot_path}")
+    print(f"2. {heuristic_plot_path}")
 
     print("\nMetadata snapshot for top heuristic-ranked URLs")
     print("----------------------------------------------")
