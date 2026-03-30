@@ -1,0 +1,11 @@
+[project]
+name = "sc4052-assignment2"
+version = "0.1.0"
+description = "PageRank-based crawler strategy demo for Tutorial 3 Question 6(i), including a sample web graph, top-k ranking, and heuristic crawl prioritization."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "networkx",
+    "numpy",
+    "scipy",
+]
